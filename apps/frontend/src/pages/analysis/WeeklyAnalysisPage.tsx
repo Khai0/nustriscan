@@ -54,8 +54,8 @@ export default function WeeklyAnalysisPage() {
   const nutritionChartData = days.map(d => ({
     day: new Date(d.date).toLocaleDateString('vi-VN', { weekday: 'short' }),
     protein: Math.round(d.protein),
-    carbs:   Math.round(d.carbohydrates ?? 0),
-    fats:    Math.round(d.fat ?? 0),
+    carbs:   0,
+    fats:    0,
   }))
 
   return (
