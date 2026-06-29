@@ -45,7 +45,7 @@ COPY --from=deps  /app/node_modules ./node_modules
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY --from=build /app/apps/backend/prisma ./apps/backend/prisma
 COPY --from=build /app/apps/backend/package.json ./apps/backend/package.json
-COPY --from=build /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=build /app/packages/shared-types/src ./packages/shared-types/src
 COPY --from=build /app/packages/shared-types/package.json ./packages/shared-types/package.json
 
 # Generate Prisma client in runtime image (matches Alpine's OpenSSL)
