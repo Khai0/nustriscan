@@ -1,31 +1,31 @@
-import type { Prisma, Scan } from '@prisma/client'
+import type { Prisma, FoodScan } from '@prisma/client'
 import { prisma } from '@config/database'
 
 export const scanRepository = {
-  findById: (id: string, userId: string): Promise<Scan | null> =>
-    prisma.scan.findFirst({ where: { id, userId } }),
+  findById: (id: string, userId: string): Promise<FoodScan | null> =>
+    prisma.foodScan.findFirst({ where: { id, userId } }),
 
   findManyByUser: async (
     userId: string,
     page: number,
     limit: number
-  ): Promise<{ scans: Scan[]; total: number }> => {
+  ): Promise<{ scans: FoodScan[]; total: number }> => {
     const skip = (page - 1) * limit
     const [scans, total] = await prisma.$transaction([
-      prisma.scan.findMany({
+      prisma.foodScan.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      prisma.scan.count({ where: { userId } }),
+      prisma.foodScan.count({ where: { userId } }),
     ])
     return { scans, total }
   },
 
-  create: (data: Prisma.ScanCreateInput): Promise<Scan> =>
-    prisma.scan.create({ data }),
+  create: (data: Prisma.FoodScanCreateInput): Promise<FoodScan> =>
+    prisma.foodScan.create({ data }),
 
-  delete: (id: string, userId: string): Promise<Scan> =>
-    prisma.scan.delete({ where: { id, userId } }),
+  delete: (id: string, userId: string): Promise<FoodScan> =>
+    prisma.foodScan.delete({ where: { id, userId } }),
 }
