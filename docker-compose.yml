@@ -1,0 +1,120 @@
+version: '3.9'
+
+# ============================================================
+# NutriScan AI — Full Stack Docker Compose
+#
+# Usage:
+#   docker compose up --build           # start everything
+#   docker compose up -d postgres redis # start only infra for local dev
+#   docker compose exec backend npx prisma migrate deploy
+#   docker compose exec backend npx prisma db seed
+# ============================================================
+
+services:
+  # ── PostgreSQL ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nutriscan-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-nutriscan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nutriscan_dev_password}
+      POSTGRES_DB:       ${POSTGRES_DB:-nutriscan_ai}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-nutriscan}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nutriscan-net
+
+  # ── Redis (caching + sessions) ────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nutriscan-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nutriscan-net
+
+  # ── Backend API ────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: nutriscan-backend
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      PORT: 8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nutriscan}:${POSTGRES_PASSWORD:-nutriscan_dev_password}@postgres:5432/${POSTGRES_DB:-nutriscan_ai}
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET:  ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      COOKIE_SECRET:      ${COOKIE_SECRET:?COOKIE_SECRET is required}
+      CSRF_SECRET:        ${CSRF_SECRET:?CSRF_SECRET is required}
+      COOKIE_SECURE:      ${COOKIE_SECURE:-false}
+      COOKIE_SAME_SITE:   ${COOKIE_SAME_SITE:-lax}
+      FRONTEND_URL:       ${FRONTEND_URL:-http://localhost:3000}
+      AI_PROVIDER:        ${AI_PROVIDER:-mock}
+      GOOGLE_VISION_API_KEY: ${GOOGLE_VISION_API_KEY:-}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY:    ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      ANTHROPIC_API_KEY:  ${ANTHROPIC_API_KEY:-}
+      SENTRY_DSN:         ${SENTRY_DSN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-NutriScan AI <noreply@nutriscan.ai>}
+    ports:
+      - '${BACKEND_PORT:-8000}:8000'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - nutriscan-net
+
+  # ── Frontend (Nginx) ───────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    container_name: nutriscan-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '${FRONTEND_PORT:-3000}:80'
+    networks:
+      - nutriscan-net
+
+networks:
+  nutriscan-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

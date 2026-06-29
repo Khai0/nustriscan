@@ -1,0 +1,16 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.git
+.gitignore
+coverage
+.vscode
+.idea
+e2e
+playwright-report
+test-results
+src/__tests__
+*.test.tsx

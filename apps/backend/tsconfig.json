@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*":               ["./src/*"],
+      "@controllers/*":    ["./src/controllers/*"],
+      "@services/*":       ["./src/services/*"],
+      "@repositories/*":   ["./src/repositories/*"],
+      "@middlewares/*":    ["./src/middlewares/*"],
+      "@validators/*":     ["./src/validators/*"],
+      "@routes/*":         ["./src/routes/*"],
+      "@config/*":         ["./src/config/*"],
+      "@utils/*":          ["./src/utils/*"],
+      "@dto/*":            ["./src/dto/*"],
+      "@types/*":          ["./src/types/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

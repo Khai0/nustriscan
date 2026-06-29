@@ -1,0 +1,228 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ════════════════════════════════════════════════════════════
+  # Lint — both apps
+  # ════════════════════════════════════════════════════════════
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint backend
+        run: npm run lint --workspace=apps/backend
+
+      - name: Lint frontend
+        run: npm run lint --workspace=apps/frontend
+
+      - name: Type-check backend
+        run: npx tsc --noEmit -p apps/backend/tsconfig.json
+
+      - name: Type-check frontend
+        run: npx tsc --noEmit -p apps/frontend/tsconfig.json
+
+  # ════════════════════════════════════════════════════════════
+  # Backend tests — unit + integration with Postgres/Redis services
+  # ════════════════════════════════════════════════════════════
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nutriscan
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: nutriscan_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://nutriscan:test_password@localhost:5432/nutriscan_test
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci_test_access_secret_minimum_32_characters
+      JWT_REFRESH_SECRET: ci_test_refresh_secret_minimum_32_characters
+      COOKIE_SECRET: ci_test_cookie_secret_minimum_32_characters
+      CSRF_SECRET: ci_test_csrf_secret_minimum_32_characters_x
+      AI_PROVIDER: mock
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: apps/backend
+
+      - name: Run Prisma migrations
+        run: npx prisma migrate deploy
+        working-directory: apps/backend
+
+      - name: Run unit + integration tests
+        run: npm run test:coverage --workspace=apps/backend
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: apps/backend/coverage
+
+  # ════════════════════════════════════════════════════════════
+  # Frontend tests — component tests
+  # ════════════════════════════════════════════════════════════
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
+
+      - name: Run component tests
+        run: npm run test --workspace=apps/frontend
+
+  # ════════════════════════════════════════════════════════════
+  # E2E tests — Playwright against built frontend
+  # ════════════════════════════════════════════════════════════
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [test-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
+
+      - name: Build frontend
+        run: npm run build --workspace=apps/frontend
+        env:
+          VITE_API_URL: http://localhost:8000
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/frontend
+
+      - name: Run Playwright tests (UI-only, no backend)
+        run: npx playwright test landing-and-auth.spec.ts
+        working-directory: apps/frontend
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/frontend/playwright-report
+          retention-days: 7
+
+  # ════════════════════════════════════════════════════════════
+  # Build — production builds + Docker images
+  # ════════════════════════════════════════════════════════════
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test-backend, test-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
+
+      - name: Build backend
+        run: |
+          npx prisma generate --schema=apps/backend/prisma/schema.prisma
+          npm run build --workspace=apps/backend
+
+      - name: Build frontend
+        run: npm run build --workspace=apps/frontend
+        env:
+          VITE_API_URL: https://api.nutriscan.ai
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          push: false
+          tags: nutriscan-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/frontend/Dockerfile
+          push: false
+          tags: nutriscan-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

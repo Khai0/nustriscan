@@ -1,0 +1,239 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DESIGN TOKENS — Light Mode
+   ============================================================ */
+@layer base {
+  :root {
+    /* ── Backgrounds ─────────────────────────────────────── */
+    --background:       0 0% 99%;
+    --foreground:       220 13% 13%;
+
+    /* ── Surface ─────────────────────────────────────────── */
+    --card:             0 0% 100%;
+    --card-foreground:  220 13% 13%;
+    --popover:          0 0% 100%;
+    --popover-foreground:220 13% 13%;
+
+    /* ── Brand: NutriScan Green ──────────────────────────── */
+    --primary:          142 71% 30%;
+    --primary-foreground:0 0% 98%;
+
+    /* ── Secondary ───────────────────────────────────────── */
+    --secondary:        142 30% 94%;
+    --secondary-foreground:142 71% 22%;
+
+    /* ── Muted ───────────────────────────────────────────── */
+    --muted:            220 14% 96%;
+    --muted-foreground: 220 10% 50%;
+
+    /* ── Accent ──────────────────────────────────────────── */
+    --accent:           142 30% 94%;
+    --accent-foreground:142 71% 22%;
+
+    /* ── Semantic ────────────────────────────────────────── */
+    --destructive:      0 84% 57%;
+    --destructive-foreground:0 0% 98%;
+    --success:          142 71% 30%;
+    --success-foreground:0 0% 98%;
+    --warning:          38 92% 50%;
+    --warning-foreground:0 0% 12%;
+    --info:             213 94% 50%;
+    --info-foreground:  0 0% 98%;
+
+    /* ── Border / Input ──────────────────────────────────── */
+    --border:           220 13% 91%;
+    --input:            220 13% 91%;
+    --ring:             142 71% 30%;
+
+    /* ── Macro colors ────────────────────────────────────── */
+    --macro-protein:       213 94% 50%;
+    --macro-protein-light: 213 94% 95%;
+    --macro-carbs:         38 92% 50%;
+    --macro-carbs-light:   38 92% 95%;
+    --macro-fats:          291 64% 55%;
+    --macro-fats-light:    291 64% 95%;
+    --macro-fiber:         142 71% 40%;
+    --macro-fiber-light:   142 71% 94%;
+    --macro-calories:      0 84% 57%;
+    --macro-calories-light:0 84% 96%;
+
+    /* ── Radius ──────────────────────────────────────────── */
+    --radius: 0.75rem;
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    --sidebar-width:         240px;
+    --sidebar-width-collapsed:64px;
+    --header-height:         64px;
+  }
+
+  /* ============================================================
+     DESIGN TOKENS — Dark Mode
+     ============================================================ */
+  .dark {
+    --background:       222 18% 8%;
+    --foreground:       210 20% 93%;
+
+    --card:             222 18% 11%;
+    --card-foreground:  210 20% 93%;
+    --popover:          222 18% 11%;
+    --popover-foreground:210 20% 93%;
+
+    --primary:          142 71% 45%;
+    --primary-foreground:222 18% 8%;
+
+    --secondary:        222 18% 16%;
+    --secondary-foreground:210 20% 80%;
+
+    --muted:            222 18% 14%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent:           222 18% 16%;
+    --accent-foreground:210 20% 80%;
+
+    --destructive:      0 72% 51%;
+    --destructive-foreground:0 0% 98%;
+    --success:          142 71% 45%;
+    --success-foreground:222 18% 8%;
+    --warning:          38 92% 50%;
+    --warning-foreground:0 0% 8%;
+    --info:             213 94% 60%;
+    --info-foreground:  222 18% 8%;
+
+    --border:           222 18% 18%;
+    --input:            222 18% 18%;
+    --ring:             142 71% 45%;
+
+    --macro-protein:       213 94% 60%;
+    --macro-protein-light: 213 94% 12%;
+    --macro-carbs:         38 92% 58%;
+    --macro-carbs-light:   38 92% 12%;
+    --macro-fats:          291 64% 65%;
+    --macro-fats-light:    291 64% 12%;
+    --macro-fiber:         142 71% 50%;
+    --macro-fiber-light:   142 71% 12%;
+    --macro-calories:      0 72% 60%;
+    --macro-calories-light:0 72% 12%;
+  }
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    @apply scroll-smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv02" 1, "cv03" 1, "cv04" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  /* Focus rings */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+/* ============================================================
+   COMPONENT UTILITIES
+   ============================================================ */
+@layer components {
+  /* Shimmer skeleton */
+  .skeleton {
+    @apply bg-muted overflow-hidden relative;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.08) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply backdrop-blur-md bg-background/80 border border-border/50;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent;
+  }
+
+  /* Macro pill */
+  .macro-pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  /* Page container */
+  .page-container {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Section */
+  .section-title {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  /* Stat card value */
+  .stat-value {
+    @apply text-3xl font-bold tabular-nums tracking-tight;
+  }
+
+  /* Scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+
+  /* Hide scrollbar */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+}
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+
+  /* Truncate multi-line */
+  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* Safe area */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* No tap highlight on mobile */
+  .tap-none { -webkit-tap-highlight-color: transparent; }
+}

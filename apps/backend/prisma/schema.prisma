@@ -1,0 +1,740 @@
+// ============================================================
+// NutriScan AI — Prisma Schema  (Phase 2)
+// PostgreSQL + Prisma ORM
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ActivityLevel {
+  SEDENTARY   // Ít vận động (văn phòng)
+  LIGHT       // Nhẹ (1–3 ngày/tuần)
+  MODERATE    // Vừa (3–5 ngày/tuần)
+  ACTIVE      // Nhiều (6–7 ngày/tuần)
+  ATHLETE     // Vận động viên (2 lần/ngày)
+}
+
+enum GoalType {
+  WEIGHT_LOSS     // Giảm cân
+  MAINTENANCE     // Duy trì
+  MUSCLE_GAIN     // Tăng cơ
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum FoodCategory {
+  VIETNAMESE
+  ASIAN
+  WESTERN
+  BEVERAGE
+  FRUIT
+  VEGETABLE
+  PROTEIN
+  GRAIN
+  DAIRY
+  SNACK
+  OTHER
+}
+
+enum WeightUnit {
+  KG
+  LB
+}
+
+enum HeightUnit {
+  CM
+  INCH
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ============================================================
+// USER — tài khoản người dùng
+// ============================================================
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  password  String
+  avatarUrl String?
+  role      UserRole  @default(USER)
+
+  // Email verification
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+
+  // Account lockout
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  lastLoginIp      String?
+
+  // Soft delete / status
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  healthProfile     HealthProfile?
+  meals             Meal[]
+  waterTracking     WaterTracking[]
+  weightTracking    WeightTracking[]
+  nutritionAnalyses NutritionAnalysis[]
+  refreshTokens     RefreshToken[]
+  authTokens        AuthToken[]
+  foodScans         FoodScan[]
+  dailyAnalyses     DailyAnalysis[]
+  weeklyAnalyses    WeeklyAnalysis[]
+  healthConditions  UserHealthCondition[]
+  achievements      UserAchievement[]
+  weeklyChallenges  WeeklyChallenge[]
+  userStats         UserStats?
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@index([lockedUntil])
+  @@map("users")
+}
+
+// ============================================================
+// REFRESH TOKEN — lưu refresh token để revoke khi cần
+// ============================================================
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ============================================================
+// HEALTH PROFILE — thông tin sức khỏe người dùng
+// ============================================================
+model HealthProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Body metrics
+  gender       Gender
+  birthDate    DateTime
+  height       Float           // Chiều cao
+  heightUnit   HeightUnit      @default(CM)
+  weight       Float           // Cân nặng hiện tại
+  weightUnit   WeightUnit      @default(KG)
+  targetWeight Float?          // Cân nặng mục tiêu
+
+  // Goals
+  activityLevel ActivityLevel  @default(MODERATE)
+  goalType      GoalType       @default(MAINTENANCE)
+
+  // Calculated fields (cached, recalculated on update)
+  bmr           Float?         // Basal Metabolic Rate
+  tdee          Float?         // Total Daily Energy Expenditure
+  calorieTarget Float?         // Mục tiêu calo mỗi ngày
+  proteinTarget Float?         // Mục tiêu protein (g)
+  carbTarget    Float?         // Mục tiêu carb (g)
+  fatTarget     Float?         // Mục tiêu fat (g)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("health_profiles")
+}
+
+// ============================================================
+// FOOD ITEM — bảng thực phẩm (dùng chung cho tất cả user)
+// ============================================================
+model FoodItem {
+  id          String       @id @default(cuid())
+  name        String
+  nameEn      String?
+  category    FoodCategory @default(OTHER)
+  brand       String?
+  description String?
+
+  // Dinh dưỡng tính trên 100g
+  servingSize    Float    @default(100)  // gram
+  servingUnit    String   @default("g")
+  calories       Float                   // kcal
+  protein        Float                   // g
+  carbohydrates  Float                   // g
+  fat            Float                   // g
+  fiber          Float    @default(0)    // g
+  sugar          Float    @default(0)    // g
+  sodium         Float    @default(0)    // mg
+  cholesterol    Float    @default(0)    // mg
+  saturatedFat   Float    @default(0)    // g
+  transFat       Float    @default(0)    // g
+
+  // Vitamins & Minerals (optional)
+  vitaminA   Float? // mcg
+  vitaminC   Float? // mg
+  vitaminD   Float? // mcg
+  calcium    Float? // mg
+  iron       Float? // mg
+  potassium  Float? // mg
+
+  isVerified  Boolean  @default(false)  // Đã xác minh dữ liệu
+  isPublic    Boolean  @default(true)
+  createdBy   String?                   // userId nếu user tự tạo
+  imageUrl    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mealItems     MealItem[]
+  mealHistories MealHistory[]
+  aliases       FoodAlias[]
+  foodScans     FoodScan[]
+
+  @@index([name])
+  @@index([category])
+  @@index([isVerified])
+  @@index([isPublic])
+  @@map("food_items")
+}
+
+// ============================================================
+// MEAL — bữa ăn của người dùng
+// ============================================================
+model Meal {
+  id       String   @id @default(cuid())
+  userId   String
+  mealType MealType
+  mealDate DateTime @db.Date         // Ngày ăn (không có giờ)
+  mealTime DateTime?                 // Giờ ăn (optional)
+  notes    String?
+
+  // Tổng dinh dưỡng (cached — tính lại khi thêm/xóa MealItem)
+  totalCalories      Float @default(0)
+  totalProtein       Float @default(0)
+  totalCarbohydrates Float @default(0)
+  totalFat           Float @default(0)
+  totalFiber         Float @default(0)
+
+  deletedAt DateTime?   // Soft delete
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealItems MealItem[]
+
+  @@index([userId])
+  @@index([mealDate])
+  @@index([userId, mealDate])
+  @@index([deletedAt])
+  @@map("meals")
+}
+
+// ============================================================
+// MEAL ITEM — từng món trong bữa ăn
+// ============================================================
+model MealItem {
+  id         String @id @default(cuid())
+  mealId     String
+  foodItemId String
+
+  quantity   Float          // Số lượng (gram hoặc đơn vị)
+  unit       String @default("g")
+
+  // Snapshot dinh dưỡng tại thời điểm log (tránh thay đổi nếu FoodItem sửa)
+  calories      Float
+  protein       Float
+  carbohydrates Float
+  fat           Float
+  fiber         Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  meal     Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  foodItem FoodItem @relation(fields: [foodItemId], references: [id])
+
+  @@index([mealId])
+  @@index([foodItemId])
+  @@map("meal_items")
+}
+
+// ============================================================
+// NUTRITION ANALYSIS — kết quả phân tích ảnh AI
+// ============================================================
+model NutritionAnalysis {
+  id        String         @id @default(cuid())
+  userId    String
+  imagePath String
+  status    AnalysisStatus @default(PENDING)
+
+  // AI result
+  detectedFoods Json?      // Array of detected food names + confidence
+  rawAiResponse Json?      // Full AI response for debugging
+
+  // Matched FoodItem (nếu AI nhận ra)
+  suggestedMealItems Json? // [{foodItemId, quantity, confidence}]
+
+  // Tổng dinh dưỡng ước tính
+  estimatedCalories      Float?
+  estimatedProtein       Float?
+  estimatedCarbohydrates Float?
+  estimatedFat           Float?
+
+  confidence Float? // 0–1 độ chính xác tổng thể
+  errorMessage String?
+
+  // Nếu user đã confirm và tạo Meal từ analysis này
+  confirmedMealId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("nutrition_analyses")
+}
+
+// ============================================================
+// WATER TRACKING — theo dõi lượng nước uống
+// ============================================================
+model WaterTracking {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Float                    // ml
+  logDate   DateTime @db.Date
+  logTime   DateTime?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([logDate])
+  @@index([userId, logDate])
+  @@map("water_tracking")
+}
+
+// ============================================================
+// WEIGHT TRACKING — theo dõi cân nặng theo thời gian
+// ============================================================
+model WeightTracking {
+  id         String     @id @default(cuid())
+  userId     String
+  weight     Float
+  weightUnit WeightUnit @default(KG)
+  logDate    DateTime   @db.Date
+  notes      String?
+
+  // Body composition (optional)
+  bodyFat   Float?   // %
+  muscleMass Float?  // kg
+  bmi       Float?   // Tính sẵn
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, logDate])          // 1 lần cân/ngày
+  @@index([userId])
+  @@index([logDate])
+  @@map("weight_tracking")
+}
+
+// ============================================================
+// MEAL HISTORY — snapshot lịch sử bữa ăn (denormalized)
+// Dùng cho report/analytics nhanh không cần JOIN nhiều bảng
+// ============================================================
+model MealHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  foodItemId String
+  mealType   MealType
+  logDate    DateTime @db.Date
+  quantity   Float
+  unit       String   @default("g")
+
+  // Snapshot
+  foodName      String
+  calories      Float
+  protein       Float
+  carbohydrates Float
+  fat           Float
+  fiber         Float @default(0)
+
+  createdAt DateTime @default(now())
+
+  foodItem FoodItem @relation(fields: [foodItemId], references: [id])
+
+  @@index([userId])
+  @@index([logDate])
+  @@index([userId, logDate])
+  @@index([foodItemId])
+  @@map("meal_history")
+}
+
+
+// ============================================================
+// AUTH TOKEN — email verification, password reset, etc.
+// ============================================================
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  type      TokenType
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([type])
+  @@index([expiresAt])
+  @@map("auth_tokens")
+}
+
+// ============================================================
+// PHASE 3 — Auth enums & models
+// ============================================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  CHANGE_EMAIL
+}
+
+// ============================================================
+// PHASE 5 — AI Scan models
+// ============================================================
+
+enum ScanStatus {
+  UPLOADING
+  PROCESSING
+  MATCHING
+  COMPLETED
+  FAILED
+}
+
+model FoodScan {
+  id     String @id @default(cuid())
+  userId String
+
+  // Image
+  imageUrl        String           // Cloudinary URL
+  imagePublicId   String           // Cloudinary public_id for deletion
+  imageThumbnail  String?          // Cloudinary thumbnail URL
+
+  // AI pipeline state
+  status       ScanStatus @default(UPLOADING)
+  aiProvider   String     @default("google_vision")  // which provider was used
+
+  // Raw AI response
+  rawLabels    Json?   // Array<{ description, score, topicality }>
+  rawResponse  Json?   // Full API response for debugging
+
+  // Matched results
+  matchedFoods Json?  // Array<FoodMatchResult>
+
+  // Best match
+  topFoodItemId  String?
+  topFoodName    String?
+  topConfidence  Float?
+
+  // Confirmed meal item (set after user confirms)
+  confirmedMealId String?
+
+  // Error tracking
+  errorMessage  String?
+  retryCount    Int     @default(0)
+
+  processingMs  Int?    // How long the AI call took
+  matchingMs    Int?    // How long the matching took
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topFood  FoodItem? @relation(fields: [topFoodItemId], references: [id])
+
+  @@index([userId, status])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("food_scans")
+}
+
+// Vietnamese food alias dictionary — for fuzzy matching
+model FoodAlias {
+  id         String   @id @default(cuid())
+  foodItemId String
+  alias      String   // e.g. "pho", "pho bo", "bun bo", "banh mi"
+  language   String   @default("vi")  // vi | en | romanized
+  createdAt  DateTime @default(now())
+
+  foodItem FoodItem @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+
+  @@unique([foodItemId, alias])
+  @@index([alias])
+  @@index([foodItemId])
+  @@map("food_aliases")
+}
+
+// ============================================================
+// PHASE 6 — Health Analysis models
+// ============================================================
+
+enum HealthCondition {
+  DIABETES
+  HYPERTENSION
+  OBESITY
+  HIGH_CHOLESTEROL
+  CELIAC
+  LACTOSE_INTOLERANT
+  NONE
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  DANGER
+}
+
+// Daily nutrition analysis snapshot — cached per user per day
+model DailyAnalysis {
+  id     String   @id @default(cuid())
+  userId String
+  date   DateTime @db.Date @unique  // one per user per day
+
+  // Totals consumed
+  calories      Float @default(0)
+  protein       Float @default(0)
+  carbohydrates Float @default(0)
+  fat           Float @default(0)
+  fiber         Float @default(0)
+  sugar         Float @default(0)
+  sodium        Float @default(0)  // mg
+  cholesterol   Float @default(0)  // mg
+  saturatedFat  Float @default(0)
+  water         Float @default(0)  // ml
+
+  // Targets (snapshot from health profile at time of analysis)
+  calorieTarget Float?
+  proteinTarget Float?
+  carbTarget    Float?
+  fatTarget     Float?
+
+  // Scores (0–100)
+  overallScore      Float?
+  calorieScore      Float?
+  proteinScore      Float?
+  sugarScore        Float?
+  sodiumScore       Float?
+  fiberScore        Float?
+  diversityScore    Float?
+
+  // Flags & Alerts (JSON array of HealthAlert)
+  alerts  Json?
+  summary String?  // One-line AI summary
+
+  // Meal count
+  mealCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("daily_analyses")
+}
+
+// Weekly analysis — generated every Sunday night or on demand
+model WeeklyAnalysis {
+  id        String   @id @default(cuid())
+  userId    String
+  weekStart DateTime @db.Date  // Monday of the week
+  weekEnd   DateTime @db.Date  // Sunday of the week
+
+  // Averages for the week
+  avgCalories      Float @default(0)
+  avgProtein       Float @default(0)
+  avgCarbs         Float @default(0)
+  avgFat           Float @default(0)
+  avgFiber         Float @default(0)
+  avgSugar         Float @default(0)
+  avgSodium        Float @default(0)
+  avgWater         Float @default(0)
+
+  // Consistency metrics
+  daysLogged       Int   @default(0)  // how many days had at least 1 meal
+  streakDays       Int   @default(0)
+  avgOverallScore  Float?
+  bestDayScore     Float?
+  worstDayScore    Float?
+
+  // Detected patterns (JSON)
+  trends       Json?  // Array of WeeklyTrend
+  deficiencies Json?  // Array of NutrientDeficiency
+  habits       Json?  // Array of DetectedHabit
+
+  // AI-generated weekly insight
+  aiInsight     String?
+  aiInsightAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@index([weekStart])
+  @@map("weekly_analyses")
+}
+
+// Health conditions per user
+model UserHealthCondition {
+  id          String          @id @default(cuid())
+  userId      String
+  condition   HealthCondition
+  severity    String?         // mild | moderate | severe
+  diagnosedAt DateTime?
+  notes       String?
+  createdAt   DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, condition])
+  @@index([userId])
+  @@map("user_health_conditions")
+}
+
+// ============================================================
+// PHASE 7 — Analytics & Gamification models
+// ============================================================
+
+enum AchievementType {
+  STREAK_7          // 7-day logging streak
+  STREAK_30         // 30-day streak
+  STREAK_100        // 100-day streak
+  PROTEIN_MASTER    // Hit protein target 5 days in a row
+  HEALTHY_WEEK      // Score >= 80 every day for a week
+  FIBER_CHAMPION    // Hit fiber target 7 days straight
+  HYDRATION_HERO    // Hit water target 7 days straight
+  CALORIE_CONTROL   // Stay in calorie range 5 days
+  FIRST_SCAN        // First food scan
+  SCAN_10           // 10 food scans
+  SCAN_50           // 50 food scans
+  WEIGHT_GOAL       // Hit weight goal
+  PERFECT_DAY       // Score = 100
+}
+
+model UserAchievement {
+  id            String          @id @default(cuid())
+  userId        String
+  achievement   AchievementType
+  unlockedAt    DateTime        @default(now())
+  progress      Float           @default(0)   // 0–100 toward next unlock
+  metadata      Json?           // extra context e.g. { streakDays: 7 }
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievement])
+  @@index([userId])
+  @@map("user_achievements")
+}
+
+model WeeklyChallenge {
+  id          String   @id @default(cuid())
+  userId      String
+  weekStart   DateTime @db.Date
+  challengeId String   // e.g. "high_protein_week"
+  title       String
+  description String
+  targetValue Float
+  currentValue Float   @default(0)
+  completed   Boolean  @default(false)
+  completedAt DateTime?
+  rewardXp    Int      @default(100)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart, challengeId])
+  @@index([userId])
+  @@index([weekStart])
+  @@map("weekly_challenges")
+}
+
+model UserStats {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  totalXp         Int      @default(0)
+  level           Int      @default(1)
+  currentStreak   Int      @default(0)
+  longestStreak   Int      @default(0)
+  totalMealsLogged Int     @default(0)
+  totalScans      Int      @default(0)
+  avgDailyScore   Float    @default(0)
+  lastLoggedAt    DateTime?
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_stats")
+}

@@ -1,0 +1,43 @@
+# ============================================================
+# NutriScan AI — Frontend Dockerfile
+# Multi-stage build: deps → build (Vite) → Nginx static serve
+# ============================================================
+
+# ── Stage 1: Dependencies ───────────────────────────────────
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+COPY apps/frontend/package.json apps/frontend/package.json
+COPY packages/shared-types/package.json packages/shared-types/package.json
+RUN npm ci --workspace=apps/frontend --workspace=packages/shared-types --include-workspace-root
+
+# ── Stage 2: Build ──────────────────────────────────────────
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json* ./
+COPY packages/shared-types packages/shared-types
+COPY apps/frontend apps/frontend
+
+# Build-time API URL (overridable via --build-arg)
+ARG VITE_API_URL=http://localhost:8000
+ENV VITE_API_URL=$VITE_API_URL
+
+RUN npm run build --workspace=packages/shared-types
+WORKDIR /app/apps/frontend
+RUN npm run build
+
+# ── Stage 3: Nginx runtime ──────────────────────────────────
+FROM nginx:1.25-alpine AS runner
+
+COPY apps/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/frontend/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O- http://localhost/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]
