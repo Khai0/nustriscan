@@ -36,7 +36,9 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl curl \
   && addgroup -g 1001 -S nodejs \
-  && adduser -S nodejs -u 1001
+  && adduser -S nodejs -u 1001 \
+  && mkdir -p /app/apps/backend/logs \
+  && chown -R nodejs:nodejs /app
 
 ENV NODE_ENV=production
 
